@@ -52,14 +52,17 @@ UNTIL ARCTAN2(SHIP:GROUNDSPEED,SHIP:VERTICALSPEED) > PitchT[3]{
 	WAIT 0.
 }
 
-UNTIL AG2 {
+UNTIL FALSE {
 	SET t TO TIME:SECONDS - t0.
 	SET Lpitch TO 90-ARCTAN2(SHIP:GROUNDSPEED,SHIP:VERTICALSPEED).
 	SET Lazimuth TO inst_az(Linc).
 	SET Lsteer TO HEADING(Lazimuth,Lpitch).
 	SET Lthrottle TO thrott(28,5).
 	//IF SHIP:VELOCITY:ORBIT:MAG > 4500{E_cutoff().}
-	//STAGIN().
+	IF STAGIN(){
+		SET t1 TO t + 5.
+		BREAK.
+	}
 	PRINT "TIME " + t + "s".
 	WAIT 0.
 }
@@ -85,7 +88,7 @@ FUNCTION STAGIN{
 	}
 	return false.
 }
-UNTIL AG3{
+UNTIL t > t1{
 	SET t TO TIME:SECONDS - t0.
 	STAGIN().
 	LOCAL e_thr IS 0.
@@ -106,6 +109,7 @@ UNTIL AG3{
 	CLEARSCREEN.
 	PRINT "TIME " +t+"s".
 	PRINT "Let the engine spool up".
+	PRINT "Engine Thrust : " + thrust_ +" kN".
 	WAIT 0.
 }
 GLOBAL Tgt_Alt IS 0.
@@ -118,18 +122,22 @@ SET Tgt_Vx TO SQRT(mu/Tgt_Alt).
 peg_init(Stg,Tgt_Alt,Tgt_Vy,Tgt_Vx,t).
 MajorCycle().
 MinorCycle().
-LOCAL tMajor IS t.
+GLOBAL tMajor IS t.
 UNTIL FALSE{
 	SET t TO TIME:SECONDS - t0.
 	LOCAL lastMajor IS t - tMajor.
-	LOCAL MajorFreq IS 0.2.
-	IF lastMajor >= MajorFreq{
-		MajorCycle().
-		SET tMajor TO t.
-		SET lastMajor TO 0.
-		//STAGIN().
-	}
+	LOCAL MajorFreq IS 0.8.
+	Navigate().
+	IF thrust_/mass_ > 1{
+		IF lastMajor >= MajorFreq{
+			MajorCycle().
+			SET tMajor TO t.
+			SET lastMajor TO 0.
+			//STAGIN().
+		}
 	MinorCycle().
+	STAGIN().
+	}
 	SET SinPitch TO fhatdot_rhat.
 	SET Lpitch TO MAX(-1,MIN(1,SinPitch)).
 	SET Lpitch TO ARCSIN(Lpitch).
@@ -139,14 +147,25 @@ UNTIL FALSE{
 	CLEARSCREEN.
 	PRINT "TIME " + ROUND(t,2) + "s".
 	PRINT "LAST MC " + ROUND(tlast,2) +"s".
+	PRINT "fdot_r " + fdot_r[j].
+	PRINT "f_r " + f_r[j].
+	PRINT "f_rT " + f_rT[j].
+	PRINT "f_theta " + f_theta[Stg].
+	PRINT "fdot_theta " + fdot_theta[Stg].
+	PRINT "fdotdot_theta " + fdotdot_theta[Stg].
 	PRINT "D " + D.
 	PRINT "N " + N.
-	PRINT "N/D "+N/D.
+	PRINT "Delta V :"+Delta_v.
 	PRINT "CUTOFF IN " + T_[Stg] + "s".
 	PRINT "CURRENT STAGE : STAGE " + j.
-	PRINT "A :" + A_[j].
-	PRINT "B :" + B_[j].
-	PRINT "C :" + C_[0].
+	PRINT "Delta A : " + Delta_A[j].
+	PRINT "Delta B : " + Delta_B[j].
+	PRINT "A2 : " + A_[stg].
+	PRINT "B2 : " + B_[stg].
+	PRINT "A1 : " + A_[j].
+	PRINT "B1 : " + B_[j].
+	PRINT "C : " + C_[0].
+	PRINT "C_T: " + C_T[Stg].
 	PRINT "Sin pitch : "+ SinPitch.
 	PRINT "Pitch : " + Lpitch.
 	LOCAL CO IS cutoff().

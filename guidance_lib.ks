@@ -28,7 +28,7 @@ GLOBAL hhat IS v(0,0,0):normalized.
 GLOBAL thetahat IS v(0,0,0):normalized.
 GLOBAL thrust_ IS 0.
 GLOBAL mass_ IS 0.
-GLOBAL acc_ IS LIST(0,0,0.57*g0).
+GLOBAL acc_ IS LIST(0,0,0.8*g0).
 GLOBAL v_e IS LIST(0,0,348*g0).
 GLOBAL tau_ IS LIST(0,0,v_e[2]/acc_[2]).
 GLOBAL omega IS 0.
@@ -68,8 +68,8 @@ GLOBAL A_ IS LIST(0,0,0).
 GLOBAL B_ IS LIST(0,0,0).
 GLOBAL C_ IS LIST(0,0,0).
 GLOBAL C_T IS LIST(0,0,0).
-GLOBAL T_ IS LIST(0,158,397).
-GLOBAL g IS 0.
+GLOBAL T_ IS LIST(0,305,400).
+GLOBAL g IS LIST(0,0,0).
 GLOBAL cent IS 0.
 GLOBAL g_term IS 0.
 GLOBAL cent_term IS 0.
@@ -160,27 +160,28 @@ FUNCTION Navigate{
 	SET vtheta TO SHIP:VELOCITY:ORBIT:MAG.
 	SET Delta_t TO t-tlast.
 	SET tlast TO t.
-	FROM {SET i TO 1.} UNTIL i = 2 STEP { SET i TO i+1.} DO{
+	FROM {SET i TO 1.} UNTIL i = nStage STEP { SET i TO i+1.} DO{
 		SET A_in[i] TO A_[i].
 		SET B_in[i] TO B_[i].
 		SET T_in[i] TO T_[i].
 	}
+	SET f_r[j] TO f_r[j] + fdot_r[j]*Delta_t.
 	SET A_[j] TO A_[j] + B_[j] * Delta_t.
 	SET T_[j] TO T_[j] - Delta_t.
-	FROM {SET i TO 1.} UNTIL i = 2 STEP {SET i TO i+1.} DO{
+	FROM {SET i TO 1.} UNTIL i = nStage STEP {SET i TO i+1.} DO{
 		SET A_upd[i] TO A_[i].
 		SET B_upd[i] TO B_[i].
 		SET T_upd[i] TO T_[i].
 	}
 	IF T_[j] < 1 {
 		SET T_[j] TO 1.
-		IF j < nStage{
+		IF j < nStage AND acc_[j] < 1{
 			SET A_[j] TO A_[j] + Delta_A[j].
 			SET B_[j] TO B_[j] + Delta_B[j].
-			IF thrust_ < 1{
-				SET j TO j+1.
-				//STAGIN().
-			}
+			//IF acc_[j] < 1{
+			SET j TO j+1.
+			STAGIN().
+			//}
 		}
 	}
 }
@@ -196,27 +197,28 @@ FUNCTION EstimateStaging{
 	SET Delta_A[0] TO 0.
 	SET Delta_B[0] TO 0.
 	IF acc_[j] <= 1{
+		STAGIN().
 		return.
 	}
 	IF j < nStage {
 		SET rdot_T[j] TO rdot+b0(j,T_[j])*A_[j]+b_(1,j,T_[j])*B_[j].
 		SET r_T[j] TO r_+rdot*T_[j]+c_(0,j,T_[j])*A_[j]+c_(1,j,T_[j])*B_[j].
 		SET rbar_[j] TO (r_T[j]+r_)/2.
-		SET C_[j] TO (mu/r_^2 - omega^2*r_)/acc_[j].
-		SET f_r[j] TO A_[j]+ C_[j].
+		SET C_[j] TO (mu/r_^2 - vtheta^2/r_)/acc_[j].
+		SET f_r[j] TO A_[j] + C_[j].
 		SET a_T[j] TO a0(j,T_[j]).
-		SET C_T[j] TO (mu/r_T[j]^2 - omega_T[j]^2*r_T[j])/a_T[j].
-		SET f_rT[j] TO A_[j]+B_[j]*T_[j]+ C_T[j].
-		SET fdot_r[j] TO (f_rT[j]-f_r[j])/T_[j].
+		//SET C_T[j] TO (mu/r_^2 - omega_T[j]^2*r_)/a_T[j].
+		//SET f_rT[j] TO A_[j]+B_[j]*T_[j]+ C_T[j].
+		//SET fdot_r[j] TO (f_rT[j]-f_r[j])/T_[j].
 		SET f_theta[j] TO 1-f_r[j]*f_r[j]/2.
 		SET fdot_theta[j] TO -f_r[j]*fdot_r[j].
 		SET fdotdot_theta[j] TO -fdot_r[j]*fdot_r[j]/2.
 		SET h_T[j] TO h_+rbar_[j]*(f_theta[j]*b0(j,T_[j])+fdot_theta[j]*b_(1,j,T_[j])+fdotdot_theta[j]*b_(2,j,T_[j])).
 		SET v_thetaT[j] TO h_T[j]/r_T[j].
 		SET omega_T[j] TO v_thetaT[j]/r_T[j].
-		SET Delta_A[j] TO (mu/r_T[j]^2-omega_T[j]^2*r_T[j])*(1/a0(j,T_[j])-1/acc_[j+1]).
-		SET Delta_B[j] TO (mu/r_T[j]^2-omega_T[j]^2*r_T[j])*(1/v_e[j]-1/v_e[j+1])+(3*omega_T[j]^2-2*mu/r_T[j]^3)*rdot_T[j]*(1/a0(j,T_[j])-1/acc_[j+1]).
-		SET A_[j+1] TO A_[j] + Delta_A[j] - B_[j]*T_[j].
+		SET Delta_A[j] TO (mu/r_^2-omega_T[j]^2*r_)*(1/a0(j,T_[j])-1/acc_[j+1]).
+		SET Delta_B[j] TO (mu/r_^2-omega_T[j]^2*r_)*(1/v_e[j+1]-1/v_e[j])+(3*h_T[j]^2/r_T[j] - 2*mu)*rdot_T[j]/r_T[j]^3 * (1/a_T[j] - 1/acc_[j+1]).
+		SET A_[j+1] TO A_[j] + Delta_A[j] + B_[j]*T_[j].
 		SET B_[j+1] TO B_[j] + Delta_B[j].
 	}
 	ELSE {
@@ -225,6 +227,7 @@ FUNCTION EstimateStaging{
 		SET r_T[j-1] TO r_.
 		SET rdot_T[j-1] TO rdot.
 		SET v_thetaT[j-1] TO vtheta.
+		SET T_[j-1] TO 0.
 		SET Delta_A[j-1] TO 0.
 		SET Delta_B[j-1] TO 0.
 	}	
@@ -237,16 +240,16 @@ FUNCTION EstimateT{
 	//SET r_T[nStage] TO r_ + rdot*T_[nStage] + (c0(nStage-1,T_[nStage-1]) + c0(nStage,T_[nStage]) + b0(nStage-1,T_[nStage-1])*T_[nStage])*A_[nStage-1] + (c_(1,nStage-1,T_[nStage-1]) + b_(1,nStage-1,T_[nStage-1])*T_[nStage] + c0(nStage,T_[nStage])*T_[nStage-1] + c_(1,nStage,T_[nStage]))*B_[nStage-1] + c0(nStage,T_[nStage])*Delta_A[nStage-1] + c_(1,nStage,T_[nStage])*Delta_B.
 	SET rbar_[nStage] TO (r_T[nStage]+r_T[nStage-1])/2.
 	SET Delta_h TO h_T[nStage] - h_T[nStage-1].
-	SET C_[nStage] TO (mu/r_T[nStage-1]^2 - v_thetaT[nStage-1]^2/r_T[nStage-1])/acc_[nStage].
+	SET C_[nStage] TO (mu/r_^2 - omega_T[nStage-1]^2/r_)/acc_[nStage].
 	SET f_r[nStage] TO A_[nStage] + C_[nStage].
 	SET a_T[nStage] TO a0(nStage,T_[nStage]).
-	SET C_T[nStage] TO (mu/r_T[nStage]^2 - v_thetaT[nStage]^2/r_T[nStage])/a_T[nStage].
-	SET f_rT[nStage] TO A_[nStage] + B_[nStage]*T_[nStage] + C_T[nStage].
-	SET fdot_r[nStage] TO (f_rT[nStage] - f_r[nStage])/T_[nStage].
-	SET f_theta[nStage] TO 1 - f_r[nStage]*f_r[nStage]/2.
-	SET fdot_theta[nStage] TO -f_r[nStage]*fdot_r[nStage].
-	SET fdotdot_theta[nStage] TO -fdot_r[nStage]*fdot_r[nStage]/2.
-	SET N TO Delta_h/rbar_[nStage] + v_e[nStage]*T_[nStage]*(fdot_theta[nStage]+fdotdot_theta[nStage]*tau_[nStage])+fdotdot_theta[nStage]*v_e[nStage]*T_[nStage]^2/2.
+	SET C_T[nStage] TO (mu/r_T[nStage]^2 - omega_T[nStage]^2/r_T[nStage])/a_T[nStage].
+	SET f_rT[j] TO A_[j] + B_[j]*(T_[nStage] + T_[nStage-1]) + Delta_A[j] + Delta_B[j]*T_[nStage] + C_T[nStage].
+	SET fdot_r[j] TO (f_rT[j] - f_r[j])/(T_[nStage]+T_[nStage-1]).
+	SET f_theta[nStage] TO 1 - (f_r[nStage]^2)/2.
+	SET fdot_theta[nStage] TO -(f_r[nStage]*fdot_r[j]).
+	SET fdotdot_theta[nStage] TO -(fdot_r[j]^2)/2.
+	SET N TO 2*Delta_h/(r_T[nStage]+r_T[nStage-1]) + v_e[nStage]*T_[nStage]*(fdot_theta[nStage]+fdotdot_theta[nStage]*(tau_[nStage]+T_[nStage]/2)).
 	SET D TO f_theta[nStage] + fdot_theta[nStage]*tau_[nStage] + fdotdot_theta[nStage]*tau_[nStage]^2.
 	IF ABS(D) < 1.0{
 		SET Delta_v TO N/D.
@@ -256,6 +259,9 @@ FUNCTION EstimateT{
 	IF NOT cutoffEnable{
 		SET T_[nStage] TO tau_[nStage]*(1 - CONSTANT():E ^(-Delta_v/v_e[nStage])).
 	}
+	"IF T_[nStage] > 633{
+		SET T_[nStage] TO 633.
+	}".
 }
 FUNCTION EstimateDelta_theta{
 	SET Delta_theta TO 0.
@@ -281,7 +287,7 @@ FUNCTION GuideMajor{
 	IF T_[nStage]>10 AND j < nStage {
 		SET cutoffEnable TO FALSE.
 		SET aa TO b0(j,T_[j]) + b0(j+1,T_[j+1]).
-		SET bb TO b_(1,j,T_[j]) + b_(1,j+1,T_[j+1]) + b0(j+1,T_[j]).
+		SET bb TO b_(1,j,T_[j]) + b_(1,j+1,T_[j+1]) + b0(j+1,T_[j+1])*T_[j].
 		SET cc TO c0(j,T_[j]) + c0(j+1,T_[j+1]) + b0(j,T_[j])*T_[j+1].
 		SET dd TO c_(1,j,T_[j]) + b_(1,j,T_[j])*T_[j+1] + c0(j+1,T_[j+1])*T_[j] + c_(1,j+1,T_[j+1]).
 		SET k_b TO rdot_T[j+1] - rdot - b0(j+1,T_[j+1])*Delta_A[j]-b_(1,j+1,T_[j+1])*Delta_B[j].
@@ -414,4 +420,12 @@ function inst_az {
 	// calculate compass heading
 	local az_corr is arctan2(vel_e, vel_n).
 	return az_corr.
+}
+FUNCTION update_cons{
+	IF acc_[j] > 1 {SET tau_[j] TO v_e[j]/acc_[j].}
+	SET Delta_t TO t - tlast.
+	SET f_r[j] TO f_r[j] + fdot_r[j]*Delta_t.
+	SET A_[j] TO A_[j] + B_[j]*Delta_t.
+	
+	
 }
